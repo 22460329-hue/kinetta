@@ -13,10 +13,12 @@ Grabador de pantalla sencillo para Linux, hecho con GTK4 y libadwaita.
 - Grabar una **pantalla**, una **ventana** o una **región** (selector propio)
 - Audio del sistema y micrófono, mezclados en un solo archivo
 - Salida en MP4 (H.264), WebM (VP9) y GIF (el GIF requiere ffmpeg)
-- Ajustes de fotogramas por segundo y calidad (el bitrate se adapta al tamaño de la pantalla)
+- Cuatro niveles de calidad (hasta 20 Mb/s a 1080p) y fotogramas por segundo; el bitrate se adapta al tamaño de la pantalla
 - Cuenta regresiva antes de empezar
 - **Pausa real:** el tiempo en pausa no aparece en el video
 - **Barra flotante de controles** con temporizador, pausa y detener
+- Nombre de archivo propio y opción de abrir el video al guardar
+- Atajos de teclado (`Ctrl`+`R` para grabar o detener, `Ctrl`+`Q` para salir)
 - Aspecto nativo con GTK4 y libadwaita
 
 ## Ejecutar

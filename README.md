@@ -13,10 +13,12 @@ A simple screen recorder for Linux, built with GTK4 and libadwaita.
 - Record a **screen**, a **window** or a **region** (own region selector)
 - System audio and microphone, mixed into one file
 - MP4 (H.264), WebM (VP9) and GIF output (GIF needs ffmpeg)
-- Frame rate and quality settings (bitrate adapts to the screen size)
+- Four quality levels (up to 20 Mb/s at 1080p) and frame rate; the bitrate adapts to the screen size
 - Countdown before recording starts
 - **Real pause:** paused time does not appear in the video
 - **Floating control bar** with timer, pause and stop
+- Custom file name and the option to open the video when it is saved
+- Keyboard shortcuts (`Ctrl`+`R` to record or stop, `Ctrl`+`Q` to quit)
 - Native look and feel with GTK4 and libadwaita
 
 ## Run it

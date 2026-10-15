@@ -17,9 +17,17 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from .recorder import Recorder, RecorderCancelled, RecorderError, RecordingConfig
+from .recorder import (
+    AUDIO_BITRATES,
+    Recorder,
+    RecorderCancelled,
+    RecorderError,
+    RecordingConfig,
+    video_bitrate_kbps,
+)
 from .region import match_monitor, select_region
 
 try:
@@ -40,11 +48,50 @@ MODES = [
 ]
 FORMATS = [("MP4 (H.264)", "mp4"), ("WebM (VP9)", "webm"), ("GIF animado", "gif")]
 FPS_OPTIONS = ["15", "24", "30", "60"]
-QUALITY_OPTIONS = ["Baja (archivo pequeño)", "Media", "Alta (archivo grande)"]
+QUALITY_OPTIONS = [
+    "Baja (archivo pequeño)",
+    "Media",
+    "Alta (recomendada)",
+    "Máxima (mejor calidad)",
+]
+SHORTCUTS = [
+    ("<Ctrl>R", "Empezar o detener la grabación"),
+    ("<Ctrl>Q", "Cerrar Kinetta"),
+]
 
 CSS = """
-.mode-button { padding: 16px 8px; border-radius: 14px; }
-.mode-button:checked { background: alpha(@accent_bg_color, 0.18); color: @accent_color; }
+/* Botones propios: algunos temas generados desde el fondo de pantalla
+   (HyDE/Wallbash) dejan los botones sin contraste en gtk.css, así que Kinetta
+   define sus botones aquí. */
+.pill { background-color: alpha(@window_fg_color, 0.10); color: @window_fg_color; box-shadow: none; }
+.pill:hover { background-color: alpha(@window_fg_color, 0.16); }
+.circular { background-color: alpha(@window_fg_color, 0.10); color: @window_fg_color; box-shadow: none; }
+.circular:hover { background-color: alpha(@window_fg_color, 0.16); }
+button.flat { background-color: transparent; background-image: none; box-shadow: none; color: @window_fg_color; }
+button.flat:hover { background-color: alpha(@window_fg_color, 0.08); }
+toast button { background-color: transparent; background-image: none; box-shadow: none; color: @accent_color; }
+toast button:hover { background-color: alpha(@accent_bg_color, 0.15); }
+window label { background-color: transparent; background-image: none; }
+button.app-version { background-color: transparent; background-image: none; box-shadow: none; color: @accent_color; }
+button.app-version:hover { background-color: alpha(@accent_bg_color, 0.15); }
+/* Entradas y controles numéricos (temas rotos los pintan blancos con texto blanco). */
+entry, spinbutton { background-color: alpha(@window_fg_color, 0.08); background-image: none;
+    box-shadow: none; color: @window_fg_color; }
+entry > text, spinbutton > text { background-color: transparent; background-image: none;
+    box-shadow: none; color: @window_fg_color; }
+spinbutton > button { background-color: alpha(@window_fg_color, 0.10); background-image: none;
+    box-shadow: none; color: @window_fg_color; border-radius: 9999px; }
+spinbutton > button:hover { background-color: alpha(@window_fg_color, 0.16); }
+/* La capa oscura tras los diálogos también sale clara con esos temas. */
+dimming { background-color: rgba(0, 0, 0, 0.4); }
+.setup-card { padding: 10px; }
+.setup-card .mode-button { padding: 14px 6px; border-radius: 12px;
+    background-color: transparent; background-image: none; box-shadow: none;
+    border: 1px solid transparent; }
+.setup-card .mode-button:hover { background-color: alpha(@window_fg_color, 0.07); }
+.setup-card .mode-button:checked { background-color: alpha(@accent_bg_color, 0.30);
+    color: @accent_color; border-color: alpha(@accent_color, 0.55); }
+.setup-card .mode-button label { font-weight: 500; }
 .record-button {
     background: #e01b24; color: #ffffff; font-weight: 700;
     min-height: 54px; border-radius: 27px; padding: 0 28px;
@@ -56,7 +103,7 @@ CSS = """
 }
 .stop-button:hover { background: #ed333b; }
 .timer { font-size: 68px; font-weight: 300; font-feature-settings: "tnum"; }
-.countdown { font-size: 140px; font-weight: 800; }
+.countdown { font-size: 140px; font-weight: 800; color: @accent_color; }
 .rec-dot { color: #e01b24; font-size: 16px; }
 .rec-dot.live { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
@@ -66,8 +113,10 @@ window.floating-bar {
     color: @window_fg_color;
     border-radius: 32px;
     border: 1px solid alpha(@window_fg_color, 0.18);
+    box-shadow: 0 6px 26px rgba(0, 0, 0, 0.38);
 }
 .bar-timer { font-size: 18px; font-weight: 500; font-feature-settings: "tnum"; min-width: 64px; }
+.bar-size { font-size: 12px; color: alpha(@window_fg_color, 0.65); font-feature-settings: "tnum"; }
 .bar-stop {
     background: #e01b24; color: #ffffff;
     min-width: 40px; min-height: 40px; border-radius: 20px; padding: 0;
@@ -89,6 +138,20 @@ def format_time(seconds: int) -> str:
     h, rest = divmod(int(seconds), 3600)
     m, s = divmod(rest, 60)
     return f"{h:d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
+def format_bytes(size: int) -> str:
+    mb = size / (1024 * 1024)
+    if mb >= 1024:
+        return f"{mb / 1024:.2f} GB".replace(".", ",")
+    if mb >= 100:
+        return f"{mb:.0f} MB"
+    return f"{mb:.1f} MB".replace(".", ",")
+
+
+def format_mbps(kbps: int) -> str:
+    text = f"{kbps / 1000:.1f}".rstrip("0").rstrip(".")
+    return text.replace(".", ",") + " Mb/s"
 
 
 def layer_shell_available() -> bool:
@@ -127,6 +190,10 @@ class FloatingBar(Gtk.Window):
         self.timer.add_css_class("bar-timer")
         box.append(self.timer)
 
+        self.size_label = Gtk.Label(label="")
+        self.size_label.add_css_class("bar-size")
+        box.append(self.size_label)
+
         self.pause_button = Gtk.Button(icon_name="media-playback-pause-symbolic", valign=Gtk.Align.CENTER)
         self.pause_button.add_css_class("circular")
         self.pause_button.set_tooltip_text("Pausar")
@@ -145,6 +212,9 @@ class FloatingBar(Gtk.Window):
 
     def set_time(self, text: str):
         self.timer.set_label(text)
+
+    def set_size(self, text: str):
+        self.size_label.set_label(text)
 
     def set_paused(self, paused: bool):
         if paused:
@@ -188,7 +258,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.toasts = Adw.ToastOverlay()
         toolbar = Adw.ToolbarView()
         self.header = Adw.HeaderBar()
-        self.header.set_title_widget(Adw.WindowTitle(title=APP_NAME, subtitle=""))
+        self.title_widget = Adw.WindowTitle(title=APP_NAME, subtitle="Listo para grabar")
+        self.header.set_title_widget(self.title_widget)
         self.header.pack_end(self._build_menu())
         toolbar.add_top_bar(self.header)
 
@@ -213,6 +284,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _build_menu(self):
         menu = Gio.Menu()
+        menu.append("Abrir carpeta de grabaciones", "win.open-folder")
+        menu.append("Atajos de teclado", "app.shortcuts")
         menu.append("Acerca de " + APP_NAME, "app.about")
         button = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, primary=True)
         button.set_tooltip_text("Menú principal")
@@ -228,7 +301,13 @@ class MainWindow(Adw.ApplicationWindow):
 
         # --- Qué grabar
         mode_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        row = Gtk.Box(spacing=10, homogeneous=True)
+        caption = Gtk.Label(label="¿Qué quieres grabar?", xalign=0)
+        caption.add_css_class("heading")
+        mode_box.append(caption)
+        card = Gtk.Box(margin_top=2)
+        card.add_css_class("card")
+        card.add_css_class("setup-card")
+        row = Gtk.Box(spacing=6, homogeneous=True, hexpand=True)
         first = None
         self.mode_buttons = {}
         for key, icon, label, _hint in MODES:
@@ -248,10 +327,12 @@ class MainWindow(Adw.ApplicationWindow):
             btn.connect("toggled", self._on_mode_toggled, key)
             self.mode_buttons[key] = btn
             row.append(btn)
-        mode_box.append(row)
+        card.append(row)
+        mode_box.append(card)
         self.mode_hint = Gtk.Label(label=MODES[0][3], xalign=0)
         self.mode_hint.add_css_class("dim-label")
         self.mode_hint.add_css_class("caption")
+        self.mode_hint.set_margin_start(4)
         mode_box.append(self.mode_hint)
         content.append(mode_box)
 
@@ -264,6 +345,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.row_cursor.set_active(True)
         for r in (self.row_system, self.row_mic, self.row_cursor):
             audio.add(r)
+        self.row_system.connect("notify::active", lambda *_: self._update_quality_hint())
+        self.row_mic.connect("notify::active", lambda *_: self._update_quality_hint())
         content.append(audio)
 
         # --- Calidad
@@ -273,8 +356,11 @@ class MainWindow(Adw.ApplicationWindow):
         self.row_fps = Adw.ComboRow(title="Fotogramas por segundo", model=Gtk.StringList.new(FPS_OPTIONS))
         self.row_fps.set_selected(2)
         self.row_quality = Adw.ComboRow(title="Calidad de video", model=Gtk.StringList.new(QUALITY_OPTIONS))
-        self.row_quality.set_selected(1)
-        for r in (self.row_format, self.row_fps, self.row_quality):
+        self.row_quality.set_selected(2)
+        self.row_quality.connect("notify::selected", lambda *_: self._update_quality_hint())
+        self.row_resolution = Adw.ActionRow(title="Resolución de captura")
+        self.row_resolution.set_subtitle(self._resolution_summary())
+        for r in (self.row_format, self.row_fps, self.row_quality, self.row_resolution):
             quality.add(r)
         content.append(quality)
 
@@ -315,8 +401,16 @@ class MainWindow(Adw.ApplicationWindow):
         self.row_countdown.set_title("Cuenta regresiva")
         self.row_countdown.set_subtitle("Segundos antes de empezar")
         self.row_countdown.set_value(3)
+        self.row_name = Adw.EntryRow(title="Nombre del archivo")
+        self.row_name.set_text("Grabacion")
+        self.row_name.set_show_apply_button(False)
+        self.row_open = Adw.SwitchRow(
+            title="Abrir el video al guardar", subtitle="Se abre con tu reproductor al terminar"
+        )
         output.add(self.row_folder)
+        output.add(self.row_name)
         output.add(self.row_countdown)
+        output.add(self.row_open)
         content.append(output)
 
         clamp.set_child(content)
@@ -325,15 +419,58 @@ class MainWindow(Adw.ApplicationWindow):
 
         # --- Botón principal fijo abajo
         bar = Adw.Clamp(maximum_size=520, margin_top=8, margin_bottom=16, margin_start=16, margin_end=16)
-        self.record_button = Gtk.Button(label="Empezar a grabar  (Ctrl+R)")
+        self.record_button = Gtk.Button()
+        inner = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER)
+        inner.append(Gtk.Image.new_from_icon_name("media-record-symbolic"))
+        self.record_label = Gtk.Label(label="Empezar a grabar")
+        inner.append(self.record_label)
+        self.record_button.set_child(inner)
         self.record_button.add_css_class("record-button")
         self.record_button.add_css_class("pill")
+        self.record_button.set_tooltip_text("Empezar o detener la grabación  (Ctrl+R)")
         self.record_button.connect("clicked", lambda *_: self._toggle_record())
         bar.set_child(self.record_button)
         page.append(bar)
 
         self._update_bar_hint()
+        self._update_quality_hint()
         return page
+
+    def _estimated_capture_size(self):
+        """Resolución aproximada de la captura: el monitor más grande, en píxeles físicos."""
+        best = None
+        for monitor in self.monitors:
+            geometry = monitor.get_geometry()
+            pixels = geometry.width * geometry.height
+            if best is None or pixels > best[0]:
+                best = (pixels, geometry.width, geometry.height, monitor.get_scale())
+        if best is None:
+            return (1920, 1080)
+        scale = best[3] or 1.0
+        return (int(best[1] * scale + 0.5), int(best[2] * scale + 0.5))
+
+    def _resolution_summary(self):
+        width, height = self._estimated_capture_size()
+        if len(self.monitors) > 1:
+            return f"hasta {width}×{height} · la del monitor que elijas"
+        return f"{width}×{height} · la del monitor elegido"
+
+    def _update_quality_hint(self):
+        """Subraya la calidad estimada (bitrate y tamaño por minuto)."""
+        if FORMATS[self.row_format.get_selected()][1] == "gif":
+            self.row_quality.set_subtitle("El GIF se convierte al final: máx. 960 px de ancho y 15 fps")
+            return
+        quality = self.row_quality.get_selected()
+        kbps = video_bitrate_kbps(self._estimated_capture_size(), quality)
+        if self.row_system.get_active() or self.row_mic.get_active():
+            kbps += AUDIO_BITRATES.get(quality, 192000) // 1000
+        per_minute = kbps * 60 / 8 / 1000
+        self.row_quality.set_subtitle(
+            f"≈ {format_mbps(kbps)} · unos {per_minute:.0f} MB por minuto"
+        )
+
+    def _set_state(self, text):
+        self.title_widget.set_subtitle(text)
 
     def _update_bar_hint(self):
         """Explica en lenguaje simple si los controles saldrán en el video."""
@@ -361,6 +498,10 @@ class MainWindow(Adw.ApplicationWindow):
         self.countdown_label.add_css_class("countdown")
         box.append(self.countdown_label)
         box.append(Gtk.Label(label="La grabación empieza en un momento"))
+        self.countdown_hint = Gtk.Label(label="")
+        self.countdown_hint.add_css_class("dim-label")
+        self.countdown_hint.add_css_class("caption")
+        box.append(self.countdown_hint)
         cancel = Gtk.Button(label="Cancelar", halign=Gtk.Align.CENTER, margin_top=12)
         cancel.add_css_class("pill")
         cancel.connect("clicked", lambda *_: self._cancel_countdown())
@@ -387,9 +528,20 @@ class MainWindow(Adw.ApplicationWindow):
         self.timer_label.add_css_class("timer")
         box.append(self.timer_label)
 
+        self.size_label = Gtk.Label(label="")
+        self.size_label.add_css_class("dim-label")
+        box.append(self.size_label)
+
         self.rec_info = Gtk.Label(label="")
         self.rec_info.add_css_class("dim-label")
         box.append(self.rec_info)
+
+        self.file_label = Gtk.Label(label="")
+        self.file_label.add_css_class("caption")
+        self.file_label.add_css_class("dim-label")
+        self.file_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self.file_label.set_max_width_chars(44)
+        box.append(self.file_label)
 
         controls = Gtk.Box(spacing=24, halign=Gtk.Align.CENTER, margin_top=36)
         self.pause_button = Gtk.Button(icon_name="media-playback-pause-symbolic", valign=Gtk.Align.CENTER)
@@ -420,6 +572,7 @@ class MainWindow(Adw.ApplicationWindow):
             r.set_sensitive(not is_gif)
             if is_gif:
                 r.set_active(False)
+        self._update_quality_hint()
 
     def _choose_folder(self, *_):
         dialog = Gtk.FileDialog(title="Elegir carpeta de guardado")
@@ -447,6 +600,7 @@ class MainWindow(Adw.ApplicationWindow):
             quality=self.row_quality.get_selected(),
             countdown=int(self.row_countdown.get_value()),
             output_dir=self.output_dir,
+            name_prefix=self.row_name.get_text().strip() or "Grabacion",
             floating_bar=self.row_bar.get_active(),
             bar_monitor=monitor,
         )
@@ -463,11 +617,11 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _set_setup_busy(self, busy, label=None):
         if busy:
-            self.record_button.set_label(label or "Preparando…")
+            self.record_label.set_label(label or "Preparando…")
             self.record_button.set_sensitive(False)
             self.stack.set_sensitive(False)
         else:
-            self.record_button.set_label("Empezar a grabar  (Ctrl+R)")
+            self.record_label.set_label("Empezar a grabar")
             self.record_button.set_sensitive(True)
             self.stack.set_sensitive(True)
 
@@ -477,6 +631,7 @@ class MainWindow(Adw.ApplicationWindow):
             return
         self._busy = True
         self._set_setup_busy(True, "Eligiendo qué grabar…")
+        self._set_state("Eligiendo qué grabar…")
         try:
             self.config = self._read_config()
             try:
@@ -505,11 +660,17 @@ class MainWindow(Adw.ApplicationWindow):
         finally:
             self._busy = False
             self._set_setup_busy(False)
+            self._set_state("Listo para grabar")
 
         if self.config.countdown > 0:
             self._countdown_left = self.config.countdown
             self.countdown_label.set_label(str(self._countdown_left))
+            mode_name = next(m[2] for m in MODES if m[0] == self.config.mode)
+            self.countdown_hint.set_label(
+                f"{mode_name} · {self.config.format_ext.upper()} · {self.config.fps} fps"
+            )
             self.stack.set_visible_child_name("countdown")
+            self._set_state("Cuenta atrás")
             self._countdown_id = GLib.timeout_add_seconds(1, self._countdown_tick)
         else:
             self._start_recording()
@@ -529,12 +690,13 @@ class MainWindow(Adw.ApplicationWindow):
             self._countdown_id = 0
         self.recorder.cancel()
         self.stack.set_visible_child_name("setup")
+        self._set_state("Listo para grabar")
 
     def _start_recording(self):
         try:
             if self.config.format_ext == "gif" and shutil.which("ffmpeg") is None:
                 raise RecorderError("Para exportar GIF se necesita ffmpeg instalado")
-            self.recorder.start(self.config)
+            path = self.recorder.start(self.config)
         except RecorderError as exc:
             self.recorder.cancel()
             self.stack.set_visible_child_name("setup")
@@ -546,12 +708,15 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Reiniciar la pantalla de grabación integrada
         self.timer_label.set_label("00:00")
+        self.size_label.set_label("")
+        self.file_label.set_label(os.path.basename(path))
         self.rec_status.set_label("Grabando")
         self.rec_dot.add_css_class("live")
         self.pause_button.set_icon_name("media-playback-pause-symbolic")
         self.pause_button.set_tooltip_text("Pausar")
         mode_name = next(m[2] for m in MODES if m[0] == self.config.mode)
         self.rec_info.set_label(f"{mode_name} · {self.config.format_ext.upper()} · {self.config.fps} fps")
+        self._set_state("Grabando")
 
         if self.config.floating_bar:
             # La ventana principal se oculta y solo queda la barra pequeña.
@@ -576,8 +741,12 @@ class MainWindow(Adw.ApplicationWindow):
     def _tick(self):
         text = format_time(self._elapsed())
         self.timer_label.set_label(text)
+        size = self.recorder.current_size()
+        size_text = format_bytes(size) if size > 0 else ""
+        self.size_label.set_label(size_text)
         if self.bar:
             self.bar.set_time(text)
+            self.bar.set_size(size_text)
         return GLib.SOURCE_CONTINUE
 
     def _toggle_pause(self):
@@ -590,6 +759,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.rec_dot.add_css_class("live")
             self.pause_button.set_icon_name("media-playback-pause-symbolic")
             self.pause_button.set_tooltip_text("Pausar")
+            self._set_state("Grabando")
             if self.bar:
                 self.bar.set_paused(False)
         else:
@@ -599,6 +769,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.rec_dot.remove_css_class("live")
             self.pause_button.set_icon_name("media-playback-start-symbolic")
             self.pause_button.set_tooltip_text("Continuar")
+            self._set_state("En pausa")
             if self.bar:
                 self.bar.set_paused(True)
 
@@ -612,6 +783,7 @@ class MainWindow(Adw.ApplicationWindow):
         if self._stopping:
             return
         self._stopping = True
+        self._set_state("Guardando…")
         try:
             if self._tick_id:
                 GLib.source_remove(self._tick_id)
@@ -635,12 +807,15 @@ class MainWindow(Adw.ApplicationWindow):
             self.set_visible(True)
             self.present()
             self.stack.set_visible_child_name("setup")
+            self._set_state("Listo para grabar")
             self._last_file = path
 
             if path:
                 label = "GIF guardado" if path.endswith(".gif") else "Grabación guardada"
                 toast = Adw.Toast(title=label, button_label="Abrir carpeta", action_name="win.open-folder")
                 self.toasts.add_toast(toast)
+                if self.row_open.get_active():
+                    Gio.AppInfo.launch_default_for_uri(Gio.File.new_for_path(path).get_uri(), None)
             else:
                 reason = failure or error or "error desconocido"
                 self.toasts.add_toast(Adw.Toast(title=f"La grabación falló: {reason}"))
@@ -669,7 +844,12 @@ class KinettaApp(Adw.Application):
         about_action.connect("activate", lambda *_: self._show_about())
         self.add_action(about_action)
 
+        shortcuts_action = Gio.SimpleAction.new("shortcuts", None)
+        shortcuts_action.connect("activate", lambda *_: self._show_shortcuts())
+        self.add_action(shortcuts_action)
+
         self.set_accels_for_action("app.quit", ["<Ctrl>Q"])
+        self.set_accels_for_action("app.shortcuts", ["<Ctrl>question"])
         self.set_accels_for_action("win.toggle-record", ["<Ctrl>R"])
 
     def _on_activate(self, app):
@@ -678,8 +858,11 @@ class KinettaApp(Adw.Application):
             provider.load_from_string(CSS)
         else:
             provider.load_from_data(CSS.encode())
+        # Prioridad por encima del CSS de usuario (~/.config/gtk-4.0/gtk.css): con
+        # temas generados desde el fondo de pantalla los botones quedan ilegibles
+        # y la interfaz debe verse como está diseñada.
         Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1
         )
         window = self.props.active_window or MainWindow(app)
         self._window = window
@@ -694,7 +877,7 @@ class KinettaApp(Adw.Application):
             about = Adw.AboutDialog(
                 application_name=APP_NAME,
                 application_icon=APP_ID,
-                developer_name="Kinetta",
+                developer_name="Proyecto Kinetta",
                 version=APP_VERSION,
                 website=APP_WEBSITE,
                 comments="Grabador de pantalla sencillo para Linux.",
@@ -706,13 +889,36 @@ class KinettaApp(Adw.Application):
                 transient_for=self.props.active_window,
                 application_name=APP_NAME,
                 application_icon=APP_ID,
-                developer_name="Kinetta",
+                developer_name="Proyecto Kinetta",
                 version=APP_VERSION,
                 website=APP_WEBSITE,
                 comments="Grabador de pantalla sencillo para Linux.",
                 license_type=Gtk.License.GPL_3_0,
             )
             about.present()
+
+    def _show_shortcuts(self, *_):
+        window = self.props.active_window
+        if hasattr(Adw, "ShortcutsItem"):
+            dialog = Adw.ShortcutsDialog()
+            if hasattr(dialog, "set_follows_content_size"):
+                dialog.set_follows_content_size(True)  # sin espacio de sobra debajo
+            section = Adw.ShortcutsSection(title="General")
+            for accelerator, title in SHORTCUTS:
+                section.add(Adw.ShortcutsItem(accelerator=accelerator, title=title))
+            dialog.add(section)
+            dialog.present(window)
+            return
+        dialog = Adw.MessageDialog(
+            transient_for=window,
+            heading="Atajos de teclado",
+            body="\n".join(
+                f"{title}: {accelerator.replace('<', '').replace('>', '+')}"
+                for accelerator, title in SHORTCUTS
+            ),
+        )
+        dialog.add_response("close", "Cerrar")
+        dialog.present()
 
 
 def main():

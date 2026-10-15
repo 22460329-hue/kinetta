@@ -47,8 +47,16 @@ CURSOR_HIDDEN = 1
 CURSOR_EMBEDDED = 2
 
 # Calidad -> kbit/s a 1080p (se escala según el tamaño de la pantalla)
-VIDEO_BITRATES = {0: 2500, 1: 5000, 2: 10000}
-AUDIO_BITRATE = 192000
+VIDEO_BITRATES = {0: 2500, 1: 5000, 2: 10000, 3: 20000}
+
+# Calidad -> bits/s del audio
+AUDIO_BITRATES = {0: 128000, 1: 160000, 2: 192000, 3: 256000}
+
+# Calidad -> preset de x264 (mejor compresión = más CPU)
+X264_PRESETS = {0: "veryfast", 1: "veryfast", 2: "faster", 3: "fast"}
+
+# Calidad -> cpu-used de VP9 (menor = mejor calidad, más lento)
+VP9_CPU_USED = {0: 7, 1: 6, 2: 6, 3: 5}
 
 # Límites del GIF para que no pese demasiado
 GIF_MAX_WIDTH = 960
@@ -74,6 +82,7 @@ class RecordingConfig:
     quality: int = 1
     countdown: int = 3
     output_dir: str = ""
+    name_prefix: str = "Grabacion"
     floating_bar: bool = True
     bar_monitor: object = None  # Gdk.Monitor donde mostrar la barra (None = el predeterminado)
     crop: tuple = None  # (left, top, width, height) en píxeles del stream
@@ -305,7 +314,9 @@ class Recorder:
         if not os.path.isdir(output_dir) or not os.access(output_dir, os.W_OK):
             raise RecorderError(f"No se puede escribir en la carpeta «{output_dir}»")
 
-        name = time.strftime("Grabacion_%Y-%m-%d_%H-%M-%S")
+        prefix = (config.name_prefix or "").strip() or "Grabacion"
+        prefix = prefix.replace("%", "%%").replace("/", "-").replace(" ", "_")
+        name = time.strftime(prefix + "_%Y-%m-%d_%H-%M-%S")
         if config.format_ext == "gif":
             self._temp_dir = tempfile.mkdtemp(prefix="kinetta-")
             self._temp_recording = os.path.join(self._temp_dir, "captura.mp4")
@@ -333,6 +344,20 @@ class Recorder:
             self._discard_pipeline()
             raise RecorderError("No se pudo iniciar la grabación (revisa los dispositivos de audio)")
         return self._target_path
+
+    def current_path(self):
+        """Archivo que se está escribiendo (el temporal mientras se graba un GIF)."""
+        return self._temp_recording or self._target_path
+
+    def current_size(self):
+        """Tamaño en bytes de la grabación en curso (0 si todavía no hay archivo)."""
+        path = self.current_path()
+        if not path:
+            return 0
+        try:
+            return os.path.getsize(path)
+        except OSError:
+            return 0
 
     def _build_pipeline(self, config, record_path):
         size = self.stream_info.get("size") or (1920, 1080)
@@ -399,12 +424,13 @@ class Recorder:
         video.append(make("capsfilter", caps=Gst.Caps.from_string(f"video/x-raw,framerate={fps}/1")))
 
         bitrate = video_bitrate_kbps(size, config.quality)
+        quality = int(config.quality)
         if container == "mp4":
             encoder_name = pick_element(("x264enc", "avenc_h264", "openh264enc"), "H.264")
             encoder = make(encoder_name)
             if encoder_name == "x264enc":
                 encoder.set_property("bitrate", bitrate)
-                encoder.set_property("speed-preset", "veryfast")
+                encoder.set_property("speed-preset", X264_PRESETS.get(quality, "veryfast"))
                 encoder.set_property("tune", "zerolatency")
                 encoder.set_property("key-int-max", fps * 2)
                 video.append(encoder)
@@ -420,7 +446,7 @@ class Recorder:
             encoder.set_property("target-bitrate", bitrate * 1000)
             encoder.set_property("deadline", 1)
             if encoder_name == "vp9enc":
-                encoder.set_property("cpu-used", 6)
+                encoder.set_property("cpu-used", VP9_CPU_USED.get(quality, 6))
                 encoder.set_property("lag-in-frames", 0)
             video.append(encoder)
             muxer_name = "webmmux"
@@ -428,6 +454,8 @@ class Recorder:
         video_tail = make("queue")
         link(*video, video_tail)
         muxer = make(muxer_name)
+        if muxer.find_property("faststart"):  # el índice va al principio: se puede ver al momento
+            muxer.set_property("faststart", True)
         filesink = make("filesink", location=record_path)
         if not muxer.link(filesink):
             raise RecorderError("No se pudo enlazar el muxer con el archivo de salida")
@@ -480,12 +508,13 @@ class Recorder:
                 last_of_branch.append(converter)
 
             encoder = make(audio_encoder_name)
+            audio_bitrate = AUDIO_BITRATES.get(quality, 192000)
             if audio_encoder_name in ("avenc_aac", "fdkaacenc"):
-                encoder.set_property("bitrate", AUDIO_BITRATE)
+                encoder.set_property("bitrate", audio_bitrate)
             elif audio_encoder_name == "opusenc":
-                encoder.set_property("bitrate", 128000)
+                encoder.set_property("bitrate", min(audio_bitrate, 192000))
             else:
-                encoder.set_property("bitrate", AUDIO_BITRATE)
+                encoder.set_property("bitrate", audio_bitrate)
             audio_queue = make("queue")
             tail = [encoder, audio_queue]
             link(*tail)
