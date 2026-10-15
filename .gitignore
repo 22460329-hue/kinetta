@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.ruff_cache/
+.flatpak-builder/
+flatpak-build/
+repo/
+*.flatpak
+*.mp4
+*.webm
+*.gif
+.idea/
+.vscode/

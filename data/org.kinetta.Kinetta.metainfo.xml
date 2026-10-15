@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.kinetta.Kinetta</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Kinetta</name>
+  <summary>A simple screen recorder for Linux</summary>
+  <description>
+    <p>Kinetta records your screen with a clean, modern interface. Choose a screen, a window or a region, pick your audio sources and quality, and press record.</p>
+    <p>A small floating bar keeps pause and stop within reach while you record.</p>
+  </description>
+  <launchable type="desktop-id">org.kinetta.Kinetta.desktop</launchable>
+  <url type="homepage">https://github.com/22460329-hue/kinetta</url>
+  <url type="bugtracker">https://github.com/22460329-hue/kinetta/issues</url>
+  <developer id="org.kinetta">
+    <name>Kinetta</name>
+  </developer>
+  <content_rating type="oars-1.1" />
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </supports>
+  <releases>
+    <release version="0.3.0" date="2026-10-15" />
+    <release version="0.2.0" date="2026-10-15" />
+  </releases>
+</component>

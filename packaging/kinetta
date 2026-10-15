@@ -1,0 +1,6 @@
+#!/bin/sh
+# Lanzador de Kinetta instalado por `make install`.
+# No necesita pip: usa las librerías GTK/GStreamer del sistema.
+here=$(dirname "$(readlink -f "$0")")
+export PYTHONPATH="$here/../share/kinetta${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m kinetta "$@"

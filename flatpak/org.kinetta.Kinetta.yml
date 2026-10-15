@@ -1,0 +1,47 @@
+# Manifiesto de Flatpak (borrador). Para probarlo:
+#   flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
+#   flatpak-builder --user --install --force-clean flatpak-build flatpak/org.kinetta.Kinetta.yml
+# Revisa que la versión del runtime sea una que Flathub siga soportando.
+#
+# Pendiente antes de enviarlo a Flathub: confirmar que org.gnome.Platform trae
+# todos los plugins de GStreamer y el plugin de PipeWire que usa el motor
+# (pipewiresrc, x264enc/vp9enc, pulsesrc, mp4mux/webmmux, audiomixer) y añadir
+# un módulo con ffmpeg si se quiere exportar GIF dentro del sandbox.
+app-id: org.kinetta.Kinetta
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+command: kinetta
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --socket=pulseaudio
+  - --filesystem=xdg-videos
+
+modules:
+  # Barra flotante y overlay de región encima de otras ventanas
+  # (KDE, Sway, Hyprland, COSMIC)
+  - name: gtk4-layer-shell
+    buildsystem: meson
+    config-opts:
+      - -Dexamples=false
+      - -Ddocs=false
+      - -Dtests=false
+    sources:
+      - type: git
+        url: https://github.com/wmww/gtk4-layer-shell.git
+        branch: main # TODO: fija un tag o commit antes de enviarlo a Flathub
+
+  - name: kinetta
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-deps --no-build-isolation --prefix=/app .
+      - install -Dm644 data/org.kinetta.Kinetta.desktop -t /app/share/applications
+      - install -Dm644 data/org.kinetta.Kinetta.metainfo.xml -t /app/share/metainfo
+      - install -Dm644 data/icons/org.kinetta.Kinetta.svg -t /app/share/icons/hicolor/scalable/apps
+    sources:
+      - type: dir
+        path: ..

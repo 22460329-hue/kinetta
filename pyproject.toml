@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kinetta"
+version = "0.3.0"
+description = "A simple screen recorder for Linux, built with GTK4 and libadwaita."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+keywords = ["screen recorder", "linux", "wayland", "gtk4", "libadwaita"]
+classifiers = [
+    "Environment :: X11 Applications :: GTK",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video :: Capture",
+]
+# PyGObject se instala con el gestor de paquetes de tu distribución (ver README).
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff"]
+
+[project.scripts]
+kinetta = "kinetta.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint.per-file-ignores]
+# gi.require_version() debe ir antes de importar gi.repository
+"src/kinetta/app.py" = ["E402"]
+"src/kinetta/recorder.py" = ["E402"]
+"src/kinetta/region.py" = ["E402"]

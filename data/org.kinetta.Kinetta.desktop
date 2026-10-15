@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Kinetta
+GenericName=Screen Recorder
+Comment=Record your screen with a simple interface
+Exec=kinetta
+Icon=org.kinetta.Kinetta
+Terminal=false
+Categories=AudioVideo;Recorder;GTK;
+Keywords=screen;recorder;screencast;video;capture;
+StartupNotify=true
