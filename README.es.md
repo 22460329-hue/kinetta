@@ -16,7 +16,7 @@ Grabador de pantalla sencillo para Linux, hecho con GTK4 y libadwaita.
 - Cuatro niveles de calidad (hasta 20 Mb/s a 1080p) y fotogramas por segundo; el bitrate se adapta al tamaño de la pantalla
 - Cuenta regresiva antes de empezar
 - **Pausa real:** el tiempo en pausa no aparece en el video
-- **Barra flotante de controles** con temporizador, pausa y detener
+- **Barra flotante de controles** con temporizador, pausa, detener y opacidad ajustable
 - Nombre de archivo propio y opción de abrir el video al guardar
 - Atajos de teclado (`Ctrl`+`R` para grabar o detener, `Ctrl`+`Q` para salir)
 - Aspecto nativo con GTK4 y libadwaita
@@ -70,7 +70,9 @@ make uninstall
 
 ### Barra flotante siempre encima (opcional)
 
-Para que la barra quede encima de las demás ventanas en KDE Plasma, Sway, Hyprland o COSMIC, instala `gtk4-layer-shell`. Sin él, la barra funciona como una ventana normal (y el selector de región usa una ventana a pantalla completa en lugar de un overlay exacto sobre el monitor elegido).
+En **Hyprland** no hace falta instalar nada: Kinetta le pide a `hyprctl` que la barra flote, quede por encima de las demás ventanas, se vea en todos los escritorios y no salga en las grabaciones (en el video queda un rectángulo negro en su lugar). Son reglas que solo viven en la sesión: se pierden al reiniciar Hyprland.
+
+En **KDE Plasma, Sway o COSMIC**, instala `gtk4-layer-shell` para que la barra quede encima de las demás ventanas. Sin él, la barra funciona como una ventana normal (y el selector de región usa una ventana a pantalla completa en lugar de un overlay exacto sobre el monitor elegido).
 
 ```bash
 sudo apt install gir1.2-gtk4layershell-1.0   # Debian / Ubuntu
@@ -96,8 +98,9 @@ GNOME no soporta este protocolo, así que ahí la barra no puede forzarse encima
 ## ¿Los controles salen en el video?
 
 - **Modo Ventana:** no. Solo se graba la ventana elegida.
+- **Pantalla o región en Hyprland:** no. La barra queda excluida de la captura (en el video se ve un rectángulo negro en su lugar).
 - **Pantalla o región con varios monitores:** muestra la barra en un monitor que no grabes.
-- **Pantalla o región con un monitor:** sí. Wayland no ofrece una forma estándar de excluir una ventana de la captura.
+- **Pantalla o región con un monitor, en otros escritorios:** sí. Wayland no ofrece una forma estándar de excluir una ventana de la captura; en Hyprland se resuelve como arriba.
 
 ## Hoja de ruta
 

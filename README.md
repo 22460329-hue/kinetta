@@ -16,7 +16,7 @@ A simple screen recorder for Linux, built with GTK4 and libadwaita.
 - Four quality levels (up to 20 Mb/s at 1080p) and frame rate; the bitrate adapts to the screen size
 - Countdown before recording starts
 - **Real pause:** paused time does not appear in the video
-- **Floating control bar** with timer, pause and stop
+- **Floating control bar** with timer, pause, stop and adjustable opacity
 - Custom file name and the option to open the video when it is saved
 - Keyboard shortcuts (`Ctrl`+`R` to record or stop, `Ctrl`+`Q` to quit)
 - Native look and feel with GTK4 and libadwaita
@@ -70,7 +70,9 @@ make uninstall
 
 ### Floating bar always on top (optional)
 
-To keep the control bar above other windows on KDE Plasma, Sway, Hyprland or COSMIC, install `gtk4-layer-shell`. Without it the bar works as a regular window (and the region selector uses a fullscreen window instead of an overlay on the exact monitor).
+On **Hyprland** there is nothing to install: Kinetta asks `hyprctl` to keep the bar floating, above other windows, visible on every workspace and out of recordings (Hyprland draws a black rectangle where the bar would be). These are session rules; they go away when Hyprland restarts.
+
+On **KDE Plasma, Sway or COSMIC**, install `gtk4-layer-shell` to keep the bar above other windows. Without it the bar works as a regular window (and the region selector uses a fullscreen window instead of an overlay on the exact monitor).
 
 ```bash
 sudo apt install gir1.2-gtk4layershell-1.0   # Debian / Ubuntu
@@ -94,8 +96,9 @@ GNOME does not support this protocol, so the bar can't be forced on top there.
 ## Will the controls appear in the recording?
 
 - **Window mode:** no. Only the chosen window is recorded.
+- **Screen or region on Hyprland:** no. The bar is excluded from the capture (the video shows a black rectangle in its place).
 - **Screen or region, several monitors:** show the bar on a monitor you are not recording.
-- **Screen or region, one monitor:** yes. Wayland has no standard way to exclude a window from a capture.
+- **Screen or region, one monitor, other desktops:** yes. Wayland has no standard way to exclude a window from a capture; on Hyprland it is handled as above.
 
 ## Roadmap
 

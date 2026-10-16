@@ -10,6 +10,7 @@ existe y la barra se muestra como una ventana normal.
 """
 import os
 import shutil
+import subprocess
 import sys
 import time
 
@@ -40,6 +41,7 @@ APP_ID = "org.kinetta.Kinetta"
 APP_NAME = "Kinetta"
 APP_VERSION = "0.3.0"
 APP_WEBSITE = "https://github.com/22460329-hue/kinetta"
+BAR_TITLE = "Kinetta Bar"  # título único: Hyprland lo usa para sus reglas
 
 MODES = [
     ("pantalla", "view-fullscreen-symbolic", "Pantalla", "Se grabará todo el monitor que elijas."),
@@ -82,6 +84,14 @@ entry > text, spinbutton > text { background-color: transparent; background-imag
 spinbutton > button { background-color: alpha(@window_fg_color, 0.10); background-image: none;
     box-shadow: none; color: @window_fg_color; border-radius: 9999px; }
 spinbutton > button:hover { background-color: alpha(@window_fg_color, 0.16); }
+/* Deslizadores (mismo problema: pista blanca por el tema roto). */
+scale trough { background-color: alpha(@window_fg_color, 0.18); border-radius: 9999px;
+    min-height: 6px; }
+scale highlight { background-color: @accent_bg_color; background-image: none;
+    border-radius: 9999px; }
+scale fill { background-color: @accent_bg_color; }
+scale slider { background-color: @window_fg_color; background-image: none; color: @window_fg_color;
+    border: none; box-shadow: none; }
 /* La capa oscura tras los diálogos también sale clara con esos temas. */
 dimming { background-color: rgba(0, 0, 0, 0.4); }
 .setup-card { padding: 10px; }
@@ -109,11 +119,19 @@ dimming { background-color: rgba(0, 0, 0, 0.4); }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
 
 window.floating-bar {
-    background: alpha(@window_bg_color, 0.97);
+    background: transparent;
     color: @window_fg_color;
-    border-radius: 32px;
-    border: 1px solid alpha(@window_fg_color, 0.18);
-    box-shadow: 0 6px 26px rgba(0, 0, 0, 0.38);
+    border: none;
+    box-shadow: none;
+}
+/* El fondo va en un contenedor con un marco transparente alrededor: si el
+   compositor recorta 1 px al ocultar la barra, no se filtra nada. */
+window.floating-bar .bar-pill {
+    background: alpha(@window_bg_color, 0.97);
+    border-radius: 28px;
+    padding: 8px 10px 8px 18px;
+    box-shadow: inset 0 0 0 1px alpha(@window_fg_color, 0.18),
+        0 3px 12px rgba(0, 0, 0, 0.45);
 }
 .bar-timer { font-size: 18px; font-weight: 500; font-feature-settings: "tnum"; min-width: 64px; }
 .bar-size { font-size: 12px; color: alpha(@window_fg_color, 0.65); font-feature-settings: "tnum"; }
@@ -158,6 +176,67 @@ def layer_shell_available() -> bool:
     return bool(LayerShell and LayerShell.is_supported())
 
 
+def hyprland_available() -> bool:
+    """¿Corremos bajo Hyprland con hyprctl a mano?"""
+    return bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")) and shutil.which("hyprctl") is not None
+
+
+_hypr_rules_applied = False
+
+
+def apply_hyprland_rules() -> None:
+    """Pide a Hyprland (una vez por ejecución) que la barra flote, se vea en
+    todos los escritorios y no salga en las grabaciones: Hyprland dibuja un
+    rectángulo negro en su lugar. Las reglas viven solo en la sesión."""
+    global _hypr_rules_applied
+    if _hypr_rules_applied or not hyprland_available():
+        return
+    _hypr_rules_applied = True
+    window_rule = (
+        f"decorate off, float on, pin on, no_initial_focus on, no_screen_share on, "
+        f"match:title ^({BAR_TITLE})$"
+    )
+    layer_rule = "no_screen_share on, match:namespace ^(kinetta-bar)$"
+    for keyword, rule in (("windowrule", window_rule), ("layerrule", layer_rule)):
+        try:
+            subprocess.run(
+                ["hyprctl", "keyword", keyword, rule],
+                capture_output=True,
+                timeout=3,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
+def patch_spin_icons(spin: Adw.SpinRow) -> None:
+    """Adw.SpinRow pinta sus botones con los iconos value-increase/decrease
+    -symbolic. Algunos temas de iconos (p. ej. Tela) los definen con
+    currentColor y GTK no los dibuja, dejando círculos vacíos: los cambiamos
+    por etiquetas de texto, que siempre se ven."""
+
+    def find_spin_button(widget):
+        child = widget.get_first_child()
+        while child:
+            if isinstance(child, Gtk.SpinButton):
+                return child
+            found = find_spin_button(child)
+            if found is not None:
+                return found
+            child = child.get_next_sibling()
+        return None
+
+    spin_button = find_spin_button(spin)
+    if spin_button is None:
+        return
+    child = spin_button.get_first_child()
+    while child:
+        if isinstance(child, Gtk.Button) and isinstance(child.get_child(), Gtk.Image):
+            icon = child.get_child().get_icon_name() or ""
+            child.set_child(Gtk.Label(label="−" if "decrease" in icon else "+"))
+        child = child.get_next_sibling()
+
+
 class FloatingBar(Gtk.Window):
     """Barra pequeña con temporizador, pausa y detener.
 
@@ -165,9 +244,10 @@ class FloatingBar(Gtk.Window):
     ventana sin bordes que se puede arrastrar.
     """
 
-    def __init__(self, app, on_pause, on_stop, monitor=None):
-        super().__init__(application=app, title=APP_NAME, decorated=False, resizable=False)
+    def __init__(self, app, on_pause, on_stop, monitor=None, opacity=1.0):
+        super().__init__(application=app, title=BAR_TITLE, decorated=False, resizable=False)
         self.add_css_class("floating-bar")
+        self.set_opacity(max(0.2, min(1.0, opacity)))
 
         if layer_shell_available():
             LayerShell.init_for_window(self)
@@ -179,7 +259,8 @@ class FloatingBar(Gtk.Window):
             if monitor is not None:
                 LayerShell.set_monitor(self, monitor)
 
-        box = Gtk.Box(spacing=10, margin_top=8, margin_bottom=8, margin_start=18, margin_end=10)
+        box = Gtk.Box(spacing=10, margin_top=6, margin_bottom=6, margin_start=6, margin_end=6)
+        box.add_css_class("bar-pill")
 
         self.dot = Gtk.Label(label="●")
         self.dot.add_css_class("rec-dot")
@@ -373,6 +454,22 @@ class MainWindow(Adw.ApplicationWindow):
         self.row_bar.connect("notify::active", lambda *_: self._update_bar_hint())
         self.group_controls.add(self.row_bar)
 
+        self.bar_opacity = 100
+        self.row_opacity = Adw.ActionRow(title="Opacidad de la barra")
+        self.scale_opacity = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 30, 100, 5)
+        self.scale_opacity.set_value(100)
+        self.scale_opacity.set_size_request(180, -1)
+        self.scale_opacity.set_valign(Gtk.Align.CENTER)
+        self.scale_opacity.set_draw_value(False)
+        self.scale_opacity.set_tooltip_text("Transparencia de la barra flotante")
+        self.scale_opacity.connect("value-changed", self._on_opacity_changed)
+        self.opacity_label = Gtk.Label(label="100 %", valign=Gtk.Align.CENTER)
+        self.opacity_label.add_css_class("dim-label")
+        self.opacity_label.set_width_chars(5)
+        self.row_opacity.add_suffix(self.scale_opacity)
+        self.row_opacity.add_suffix(self.opacity_label)
+        self.group_controls.add(self.row_opacity)
+
         names = []
         for i, m in enumerate(self.monitors):
             connector = m.get_connector() or f"Monitor {i + 1}"
@@ -401,6 +498,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.row_countdown.set_title("Cuenta regresiva")
         self.row_countdown.set_subtitle("Segundos antes de empezar")
         self.row_countdown.set_value(3)
+        patch_spin_icons(self.row_countdown)
         self.row_name = Adw.EntryRow(title="Nombre del archivo")
         self.row_name.set_text("Grabacion")
         self.row_name.set_show_apply_button(False)
@@ -472,12 +570,19 @@ class MainWindow(Adw.ApplicationWindow):
     def _set_state(self, text):
         self.title_widget.set_subtitle(text)
 
+    def _on_opacity_changed(self, scale):
+        self.bar_opacity = int(scale.get_value())
+        self.opacity_label.set_label(f"{self.bar_opacity} %")
+
     def _update_bar_hint(self):
         """Explica en lenguaje simple si los controles saldrán en el video."""
+        self.row_opacity.set_sensitive(self.row_bar.get_active())
         if not self.row_bar.get_active():
             text = "Sin barra, usa la ventana de Kinetta para detener la grabación."
         elif self.mode == "ventana":
             text = "Al grabar una ventana, los controles no salen en el video."
+        elif hyprland_available():
+            text = "La barra no sale en el video y sigue visible en todos los escritorios."
         elif layer_shell_available() and len(self.monitors) > 1:
             text = "Para que la barra no salga en el video, muéstrala en un monitor que no grabes."
         else:
@@ -485,7 +590,7 @@ class MainWindow(Adw.ApplicationWindow):
                 "Con un solo monitor, la barra saldrá en el video si grabas pantalla o región. "
                 "Usa el modo Ventana para evitarlo."
             )
-        if not layer_shell_available():
+        if not layer_shell_available() and not hyprland_available():
             text += " Tu escritorio no permite fijar la barra encima de otras ventanas."
         self.group_controls.set_description(text)
 
@@ -720,11 +825,13 @@ class MainWindow(Adw.ApplicationWindow):
 
         if self.config.floating_bar:
             # La ventana principal se oculta y solo queda la barra pequeña.
+            apply_hyprland_rules()  # antes de crearla: Hyprland aplica reglas al mapear
             self.bar = FloatingBar(
                 self.get_application(),
                 on_pause=self._toggle_pause,
                 on_stop=self._stop_recording,
                 monitor=self.config.bar_monitor,
+                opacity=self.bar_opacity / 100,
             )
             self.bar.present()
             self.set_visible(False)
