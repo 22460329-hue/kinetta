@@ -70,7 +70,7 @@ make uninstall
 
 ### Barra flotante siempre encima (opcional)
 
-En **Hyprland** no hace falta instalar nada: Kinetta le pide a `hyprctl` que la barra flote, quede por encima de las demás ventanas, se vea en todos los escritorios y no salga en las grabaciones (en el video queda un rectángulo negro en su lugar). Son reglas que solo viven en la sesión: se pierden al reiniciar Hyprland.
+En **Hyprland** no hace falta instalar nada: Kinetta le pide a `hyprctl` que la barra flote, quede por encima de las demás ventanas, se vea en todos los escritorios y no salga en las grabaciones (en el video queda una cápsula negra con la misma forma de la barra). Son reglas que solo viven en la sesión: se pierden al reiniciar Hyprland.
 
 En **KDE Plasma, Sway o COSMIC**, instala `gtk4-layer-shell` para que la barra quede encima de las demás ventanas. Sin él, la barra funciona como una ventana normal (y el selector de región usa una ventana a pantalla completa en lugar de un overlay exacto sobre el monitor elegido).
 
@@ -98,7 +98,7 @@ GNOME no soporta este protocolo, así que ahí la barra no puede forzarse encima
 ## ¿Los controles salen en el video?
 
 - **Modo Ventana:** no. Solo se graba la ventana elegida.
-- **Pantalla o región en Hyprland:** no. La barra queda excluida de la captura (en el video se ve un rectángulo negro en su lugar).
+- **Pantalla o región en Hyprland:** no. La barra queda excluida de la captura (en el video se ve una cápsula negra con su misma forma).
 - **Pantalla o región con varios monitores:** muestra la barra en un monitor que no grabes.
 - **Pantalla o región con un monitor, en otros escritorios:** sí. Wayland no ofrece una forma estándar de excluir una ventana de la captura; en Hyprland se resuelve como arriba.
 

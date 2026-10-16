@@ -42,6 +42,7 @@ APP_NAME = "Kinetta"
 APP_VERSION = "0.3.0"
 APP_WEBSITE = "https://github.com/22460329-hue/kinetta"
 BAR_TITLE = "Kinetta Bar"  # título único: Hyprland lo usa para sus reglas
+BAR_RADIUS = 28  # radio de la píldora; Hyprland lo reutiliza para el hueco negro
 
 MODES = [
     ("pantalla", "view-fullscreen-symbolic", "Pantalla", "Se grabará todo el monitor que elijas."),
@@ -128,7 +129,7 @@ window.floating-bar {
    compositor recorta 1 px al ocultar la barra, no se filtra nada. */
 window.floating-bar .bar-pill {
     background: alpha(@window_bg_color, 0.97);
-    border-radius: 28px;
+    border-radius: @BAR_RADIUS;
     padding: 8px 10px 8px 18px;
     box-shadow: inset 0 0 0 1px alpha(@window_fg_color, 0.18),
         0 3px 12px rgba(0, 0, 0, 0.45);
@@ -150,6 +151,7 @@ window.region-overlay { background: transparent; }
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
 }
 """
+CSS = CSS.replace("@BAR_RADIUS", f"{BAR_RADIUS}px")
 
 
 def format_time(seconds: int) -> str:
@@ -192,9 +194,11 @@ def apply_hyprland_rules() -> None:
     if _hypr_rules_applied or not hyprland_available():
         return
     _hypr_rules_applied = True
+    # `rounding` da forma de cápsula al rectángulo negro que Hyprland deja en
+    # la grabación, para que copie la silueta redondeada de la barra.
     window_rule = (
         f"decorate off, float on, pin on, no_initial_focus on, no_screen_share on, "
-        f"match:title ^({BAR_TITLE})$"
+        f"rounding {BAR_RADIUS}, match:title ^({BAR_TITLE})$"
     )
     layer_rule = "no_screen_share on, match:namespace ^(kinetta-bar)$"
     for keyword, rule in (("windowrule", window_rule), ("layerrule", layer_rule)):
