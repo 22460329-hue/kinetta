@@ -8,6 +8,16 @@ Grabador de pantalla sencillo para Linux, hecho con GTK4 y libadwaita.
 > (xdg-desktop-portal), PipeWire y GStreamer. Faltan los atajos globales, las
 > traducciones y la publicación en Flathub (ver hoja de ruta).
 
+## Capturas
+
+| Pantalla principal | Grabación en curso |
+| --- | --- |
+| ![Pantalla principal](capturas/01-inicio.png) | ![Grabación en curso](capturas/02-grabando.png) |
+
+La barra flotante de controles se queda encima de todo mientras grabas:
+
+![Barra flotante](capturas/03-barra.png)
+
 ## Funciones
 
 - Grabar una **pantalla**, una **ventana** o una **región** (selector propio)

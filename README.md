@@ -8,6 +8,16 @@ A simple screen recorder for Linux, built with GTK4 and libadwaita.
 > (xdg-desktop-portal), PipeWire and GStreamer. Global shortcuts, translations
 > and the Flathub release are still on the roadmap.
 
+## Screenshots
+
+| Set up | Recording |
+| --- | --- |
+| ![Main screen](capturas/01-inicio.png) | ![Recording in progress](capturas/02-grabando.png) |
+
+The floating control bar stays on top of everything while recording:
+
+![Floating bar](capturas/03-barra.png)
+
 ## Features
 
 - Record a **screen**, a **window** or a **region** (own region selector)
