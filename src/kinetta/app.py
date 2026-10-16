@@ -42,7 +42,6 @@ APP_NAME = "Kinetta"
 APP_VERSION = "0.3.0"
 APP_WEBSITE = "https://github.com/22460329-hue/kinetta"
 BAR_TITLE = "Kinetta Bar"  # título único: Hyprland lo usa para sus reglas
-BAR_RADIUS = 28  # radio de la píldora; Hyprland lo reutiliza para el hueco negro
 
 MODES = [
     ("pantalla", "view-fullscreen-symbolic", "Pantalla", "Se grabará todo el monitor que elijas."),
@@ -129,7 +128,7 @@ window.floating-bar {
    compositor recorta 1 px al ocultar la barra, no se filtra nada. */
 window.floating-bar .bar-pill {
     background: alpha(@window_bg_color, 0.97);
-    border-radius: @BAR_RADIUS;
+    border-radius: 28px;
     padding: 8px 10px 8px 18px;
     box-shadow: inset 0 0 0 1px alpha(@window_fg_color, 0.18),
         0 3px 12px rgba(0, 0, 0, 0.45);
@@ -151,7 +150,6 @@ window.region-overlay { background: transparent; }
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
 }
 """
-CSS = CSS.replace("@BAR_RADIUS", f"{BAR_RADIUS}px")
 
 
 def format_time(seconds: int) -> str:
@@ -187,30 +185,30 @@ _hypr_rules_applied = False
 
 
 def apply_hyprland_rules() -> None:
-    """Pide a Hyprland (una vez por ejecución) que la barra flote, se vea en
-    todos los escritorios y no salga en las grabaciones: Hyprland dibuja un
-    rectángulo negro en su lugar. Las reglas viven solo en la sesión."""
+    """Pide a Hyprland (una vez por ejecución) que la barra flote, quede por
+    encima de las demás ventanas y se vea en todos los escritorios. Las reglas
+    viven solo en la sesión.
+
+    Hyprland sabe dejar una ventana fuera de las grabaciones, pero lo hace
+    tapándola con una cápsula negra: queda peor que la propia barra, así que no
+    se usa. Si grabas pantalla o región, la barra sale en el video."""
     global _hypr_rules_applied
     if _hypr_rules_applied or not hyprland_available():
         return
     _hypr_rules_applied = True
-    # `rounding` da forma de cápsula al rectángulo negro que Hyprland deja en
-    # la grabación, para que copie la silueta redondeada de la barra.
-    window_rule = (
-        f"decorate off, float on, pin on, no_initial_focus on, no_screen_share on, "
-        f"rounding {BAR_RADIUS}, match:title ^({BAR_TITLE})$"
+    rule = (
+        f"decorate off, no_blur on, float on, pin on, no_initial_focus on, "
+        f"match:title ^({BAR_TITLE})$"
     )
-    layer_rule = "no_screen_share on, match:namespace ^(kinetta-bar)$"
-    for keyword, rule in (("windowrule", window_rule), ("layerrule", layer_rule)):
-        try:
-            subprocess.run(
-                ["hyprctl", "keyword", keyword, rule],
-                capture_output=True,
-                timeout=3,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError):
-            pass
+    try:
+        subprocess.run(
+            ["hyprctl", "keyword", "windowrule", rule],
+            capture_output=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def patch_spin_icons(spin: Adw.SpinRow) -> None:
@@ -586,7 +584,10 @@ class MainWindow(Adw.ApplicationWindow):
         elif self.mode == "ventana":
             text = "Al grabar una ventana, los controles no salen en el video."
         elif hyprland_available():
-            text = "La barra no sale en el video y sigue visible en todos los escritorios."
+            text = (
+                "La barra queda encima de todo y te sigue en todos los escritorios. "
+                "Al grabar pantalla o región saldrá en el video: bájale la opacidad si quieres disimularla."
+            )
         elif layer_shell_available() and len(self.monitors) > 1:
             text = "Para que la barra no salga en el video, muéstrala en un monitor que no grabes."
         else:

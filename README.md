@@ -70,7 +70,9 @@ make uninstall
 
 ### Floating bar always on top (optional)
 
-On **Hyprland** there is nothing to install: Kinetta asks `hyprctl` to keep the bar floating, above other windows, visible on every workspace and out of recordings (the video shows a black capsule matching the bar's shape). These are session rules; they go away when Hyprland restarts.
+On **Hyprland** there is nothing to install: Kinetta asks `hyprctl` to keep the bar floating, above other windows and visible on every workspace. These are session rules; they go away when Hyprland restarts.
+
+Hyprland can keep the bar out of recordings, but it does so by covering it with a black capsule that looks worse than the bar itself, so Kinetta does not use it: **when you record the screen or a region, the bar shows up in the video**. Lower its opacity in Controls if you want to make it discreet.
 
 On **KDE Plasma, Sway or COSMIC**, install `gtk4-layer-shell` to keep the bar above other windows. Without it the bar works as a regular window (and the region selector uses a fullscreen window instead of an overlay on the exact monitor).
 
@@ -96,9 +98,8 @@ GNOME does not support this protocol, so the bar can't be forced on top there.
 ## Will the controls appear in the recording?
 
 - **Window mode:** no. Only the chosen window is recorded.
-- **Screen or region on Hyprland:** no. The bar is excluded from the capture (the video shows a black capsule matching its shape).
 - **Screen or region, several monitors:** show the bar on a monitor you are not recording.
-- **Screen or region, one monitor, other desktops:** yes. Wayland has no standard way to exclude a window from a capture; on Hyprland it is handled as above.
+- **Screen or region, one monitor:** yes. Wayland has no standard way to exclude a window from a capture. On Hyprland it could be covered with a black capsule, but that looks worse than the bar: lower its opacity if you want to make it discreet.
 
 ## Roadmap
 
